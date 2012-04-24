@@ -2,8 +2,10 @@ package server.store;
 
 import static java.lang.System.out;
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
@@ -31,9 +33,11 @@ import server.job.Job;
 import utils.UtilityBelt;
 import data.Record;
 import data.SearchQuery;
+import data.ServerInfo;
 
 @XmlRootElement(name="RecordStore")
 public class RecordStore {
+	private File record_store;
 	@XmlAttribute(name="timestamp")
 	protected String timestamp;
 	@XmlElement(name="name")
@@ -47,12 +51,18 @@ public class RecordStore {
 	
 	
 	
+	
 	public boolean is_dead(){
 		return kill_switch.get() && tasks.isEmpty();
 	}
 	
 	public void kill_switch(){
 		kill_switch.set(true);
+		try{
+			if(persistent)
+				write_records_to_store();
+		}catch(IOException ioe){ out.println("unable to write out file."); }
+		
 	}
 	
 	
@@ -61,17 +71,19 @@ public class RecordStore {
 	 * @param query
 	 * @return
 	 */
-	protected List<Record> search_records(SearchQuery query){
+	public List<Record> search_records(SearchQuery query){
 		List<Record> found_recs = new ArrayList<Record>();
 		for(Record rec : records){
-			if(rec.get_name().matches(query.get_name())){
-				if(rec.get_ip().matches(query.get_ip())){
+			if(rec.get_name().matches(clean_name(query.get_name()))){
+				if(rec.get_ip().matches(clean_ip(query.get_ip()))){
 					found_recs.add(rec);
 				}
 			}
 		}
 		return found_recs;
 	}
+	
+	
 	
 	public void spawn_task(Job type, InetAddress inet, int port, byte[] data) throws SocketException{
 		new Task(type, inet, port, data).start();
@@ -98,6 +110,16 @@ public class RecordStore {
 		return out;
 	}
 	
+	
+	protected String clean_name(String raw){
+		return raw.replaceAll("\\.", "\\\\.").replaceAll("\\*", "[\\\\w\\\\s]+");
+	}
+	
+	protected String clean_ip(String raw){
+		return raw.equals(Record.get_ip_regex())? raw: raw.replaceAll("\\.", "\\\\.").replaceAll("\\*", "[\\\\d]");
+	}
+	
+	
 	/**
 	 * Add a record to the store
 	 * @param record
@@ -110,20 +132,36 @@ public class RecordStore {
 		return found_duplicate;
 	}
 	
+	public byte[] get_bootstrap(ServerInfo info) throws JAXBException{
+		return UtilityBelt.java_2_bytes(new InitialRecordUpdate(info, this.get_records()), InitialRecordUpdate.class);
+	}
+	
+	public ServerInfo load_bootstrap(byte[] bytes) throws JAXBException, ClassCastException{
+		InitialRecordUpdate iru = (InitialRecordUpdate) UtilityBelt.bytes_2_java(bytes, InitialRecordUpdate.class);
+		out.println(iru.info.name);
+		for(Record rec : iru.data){
+			add_data(rec);
+		}
+		this.name = iru.info.name;
+		return iru.info;
+	}
+	
 	protected boolean delete_data(SearchQuery query){
 		List<Integer> ptrs = new ArrayList<Integer>();
 		ListIterator<Record> iter = records.listIterator();
 		int current = 0;
 		while(iter.hasNext()){
 			Record this_rec = iter.next();
-			if(query.get_ip().length() > 0){
-				if(this_rec.get_ip().equals(query.get_ip())){
-					if(query.get_port() == this_rec.get_port() || query.get_port() == 0){
-						ptrs.add(current);
+			if(query.get_name().equals(this_rec.get_name())){
+				if(query.get_ip() != null){
+					if(this_rec.get_ip().equals(query.get_ip())){
+						if(query.get_port() == this_rec.get_port() || query.get_port() == 0){
+							ptrs.add(current);
+						}
 					}
+				}else if(query.get_port() == 0 || this_rec.get_port() == query.get_port()){
+					ptrs.add(current);
 				}
-			}else if(query.get_port() != 0 && this_rec.get_port() == query.get_port()){
-				ptrs.add(current);
 			}
 			current = iter.nextIndex();
 		}
@@ -136,6 +174,13 @@ public class RecordStore {
 		}
 	}
 	
+	
+	public void restart(){
+		this.kill_switch = new AtomicBoolean(false);
+		this.tasks = new ConcurrentHashMap<String, Task>();
+		this.record_store = new File("data/"+name+".dat");
+	}
+	
 	protected RecordStore(){}
 	
 	protected RecordStore(String name, boolean persistent){
@@ -145,14 +190,29 @@ public class RecordStore {
 		this.tasks = new ConcurrentHashMap<String, Task>();
 		this.timestamp = UtilityBelt.get_timestamp();
 		this.persistent = persistent;
+	    record_store = (persistent)? new File("data/"+name+".dat"):null;
 	}
 	
 	public static RecordStore make_temp_store(String name){
 		return new RecordStore(name, false);
 	}
 	
+	private void write_records_to_store() throws IOException{
+		try{
+			out.println("Writing records to dat file");
+			out.println(record_store.getAbsolutePath());
+		    BufferedWriter buff = new BufferedWriter(new FileWriter(record_store.getAbsolutePath()));
+		    String data = new String(UtilityBelt.java_2_bytes(this, RecordStore.class));
+		    try{
+	    	    buff.write(data.trim());
+		    }finally{ buff.close(); }
+		}catch(JAXBException jaxbe){ out.println("Unable to write out to file..."); }
+	    
+	}
+	
 	public static RecordStore load_from_file(String location){
-		File file = new File(location);
+		File file = new File("data/"+location+".dat");
+		out.println(file.getAbsolutePath());
 		if(file.exists() && file.isFile()){
 			try{
 				InputStream is = new FileInputStream(file);
@@ -170,7 +230,9 @@ public class RecordStore {
 			    }
 
 			    is.close();
-			    return (RecordStore) UtilityBelt.bytes_2_java(data, RecordStore.class);
+			    RecordStore rs = (RecordStore) UtilityBelt.bytes_2_java(data, RecordStore.class);
+			    rs.restart();
+			    return rs;
 			} catch (Exception e) {
 				out.println("Unable to load data from file... will save new file on exit.");
 				return new RecordStore(location, true);
@@ -181,6 +243,20 @@ public class RecordStore {
 		}
 	}
 	
+	@XmlRootElement(name="InitialRecordUpdate")
+	static final class InitialRecordUpdate{
+		@XmlElement(name="data")
+		public List<Record> data;
+		@XmlElement(name="info")
+		public ServerInfo info;
+		
+		public InitialRecordUpdate(ServerInfo info, List<Record> records){
+			this.info = info;
+			this.data = records;
+		}
+		
+		public InitialRecordUpdate(){ this.data = new ArrayList<Record>();}
+	}
 	
 	 private final class Task extends Thread{
 		private Job type;
@@ -212,7 +288,7 @@ public class RecordStore {
 			try{
 				SearchQuery query = (SearchQuery) UtilityBelt.bytes_2_java(data, SearchQuery.class);
 				if(delete_data(query)){
-					socket.send(GenericResponse.create_response("Deleted records"), inet, port_num);
+					socket.send(GenericResponse.create_response(name), inet, port_num);
 				}else send_error(Error.RECORD_NOT_FOUND);
 			}catch(ClassCastException cce){
 				send_error(Error.INVALID_QUERY);
@@ -223,9 +299,9 @@ public class RecordStore {
 			try{
 				Record record = (Record) UtilityBelt.bytes_2_java(data, Record.class);
 				boolean okay = find_duplicate(record);
-				if(okay){
+				if(!okay){
 					add_data(record);
-					socket.send(GenericResponse.create_response("Added record"), inet, port_num);
+					socket.send(GenericResponse.create_response(name), inet, port_num);
 				}else send_error(Error.OVERWRITE_ERROR);
 			}catch(ClassCastException cce){
 				send_error(Error.INVALID_RECORD);

@@ -1,0 +1,114 @@
+Currently trying to fix up… There are bugs… I will try to get as many fixed as i can before end of semester.
+
+There already are two jars for you to use to run the client and server
+
+call "java -jar Client.jar to run client"
+call "java -jar Server.jar <name> <port_num>" to run the server
+
+if you want to build the files use ant to build the files...
+if you want to run the resulting build, for now you go into the 
+bin folder and call java Client or java Server <name> <port_num>
+
+
+***** HOW IT WORKS *****
+CLIENT
+Client is a running process (single threaded) that allows the user
+to type in a series of commands to interact with a server.
+There are 10 different commands that have been implemented (or waiting)
+How to use them can be seen in the menu of the client class
+
+Server - Adds server information to the system. Can optionally add 
+         a name of a data store that you want to communicate with
+Show   - (Yet to be implemented) Shows the open data stores on server
+Insert - Allows user to insert a record into a data store on a server
+Delete - Allows user to delete a record from a data store on a server
+Find   - Allows user to find set of records from a data store 
+Test   - Allows user to ping a server to see if it is up and running
+Switch - Allows user to switch to a different data store on the same 
+         server. If no name give, switches to the temporary store on
+         the server. If a name is given, allows user to create a new
+         data store with the next operation on the server
+Link   - Allows user to link two servers together. (This is based on names
+		 given in the record store using insert).
+Unlink - Allows user to unlink two servers using alias names on server
+Register Allows user to register themself to a server to accept incoming
+         messages
+Unregis - Allows user to unregister themselves, so they cannot accept
+          incoming messages
+Send   - Allows user to send another client a message
+List   - Allows user to see registered users (not fully implemented)
+         Currently uses regex and the server_name (port number right now).
+Kill   - Allows user to kill a data store if name is given, otherwise
+         kills all data stores currently running on the server, and then
+         shuts down server
+Help   - Does just what the name suggests
+Close  - Closes client
+
+
+SERVER
+The server is a multithreaded process that has several key components
+ServerThread  - The main thread of execution, responsible for accepting
+                requests from clients using a non-blocking mechanism
+Demultiplexor - Takes request from client, and places it in proper 
+                record store (data store). These data stores are accessed
+				via ConcurrentHashMap<String, RecordStore>.
+RecordStore   - Referred to as a data store, these thread(s) is responsible for
+                a set of records (persistent or transient). Accepts requests
+                sent from the Demultiplexor, and runs them. Resulting messages
+                are sent to the client directly from the RecordStore.
+                If a name was given to this record store, it persists on close
+                and information is stored in the data folder, with a .dat extension
+                Each job turns into an appropriate task. Records are stored in 
+				a CopyOnWriteArrayList<Record> to allow concurrency on reads
+				during writes. We allow reads during writes, but only one write
+				at a time in order to maintain some lineage with the data
+				(no branching of list history).
+ReadTask      - These thread(s) are responsible for reads on a data store
+WriteTask     - These thread(s) are responsible for writes on a data store
+DeleteTask    - These thread(s) are responsible for deletes on a data store
+
+
+
+
+***** PROTOCOL USED *****
+Messages being passed between client and server utilize the JAXB
+(Java Xml Bindings) protocol. There are a series of message objects
+that are passed between the client and server carrying information.
+The messages are serialized to XML before being passed through the
+sockets. The idea behind this is that in a scenario where you have
+clients and servers running and do not know the implementation of
+the other side (client running python, server running java), it 
+allows for the data to be defined in a way where it is still able
+to function regardless of language. 
+
+comm.msg
+IMMessage
+LinkMessage
+DeleteMessage - Called when deleting a record from a data store
+ReadMessage   - Called for finding messages on a data store
+WriteMessage  - Called for adding a new message to a data store
+ErrorMessage  - Called when an error arises on server
+TestMessage   - Called when pinging for server existance
+KillMessage   - Called when wanting to kill a data store or server
+
+comm.resp
+DeleteResponseMessage     - Sent when Delete was successful
+ReadListMessage           - Sent when Find message was successful
+ReadResponseMessage       - Sent after receiving ReadListMessage was 
+                            Successful
+WriteResponseMessage      - Sent when adding new record was successful
+TestResponseMessage       - Sent when a server receives a ping message
+KillResponseMessage       - Sent when closing a data store on server is 
+                            successful
+BatchKillResponseMessage  - Sent when closing all data stores and server is
+                            successful.
+
+****** TESTING USED ********
+A series of tests were written using JUnit4 that primarily tested the 
+durability of the RecordStore, the message passing system, as well as
+each of the tasks. A few multithreaded tests were written too, but due
+to the complexity of these types of tasks, they are somewhat trivial.
+
+Improvement: for the next iteration, I need to clean up the clientlist 
+             bug and tune up the updating system... i know there are some
+             bugs to be removed for those two...

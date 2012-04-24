@@ -41,6 +41,9 @@ public abstract class AbstractRecord{
 	            "([01*]?[\\d*]{1,2}?|2[0-4*][\\d*]| 25[0-5*])\\." +
 	            "([01*]?[\\d*]{1,2}?|2[0-4*][\\d*]| 25[0-5*])$";
 	
+	   
+	public static final String get_ip_regex(){ return IP_PATTERN; }
+	   
 	/**
 	 * Validates an ip address
 	 * @param ip the address to be validated

@@ -1,5 +1,7 @@
 package msg;
 
+import java.util.UUID;
+
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.annotation.XmlAttribute;
 import javax.xml.bind.annotation.XmlElement;
@@ -18,9 +20,11 @@ public class InstantMessage implements Message{
 	private Record receiver;
 	@XmlElement(name="sender_info")
 	private Record sender;
+	@XmlAttribute(name="uuid")
+	private String uuid;
 	
 	
-	
+	public String get_id(){ return uuid; }
 	public String get_timestamp(){ return timestamp; }
 	public String get_message(){ return message; }
 	public Record get_receiver_nfo(){ return receiver; }
@@ -35,7 +39,10 @@ public class InstantMessage implements Message{
 		this.sender = sender;
 		this.receiver = receiver;
 		this.message = msg;
+		this.uuid = UUID.randomUUID().toString();
 	}
+	
+	private InstantMessage(){ }
 	
 	public byte[] to_bytes() throws JAXBException {
 		// TODO Auto-generated method stub

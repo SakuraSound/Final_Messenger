@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<RecordStore persistent="true" timestamp="2012-04-23 14:57:27:544">
+    <name>sand</name>
+    <records timestamp="2012-04-23 14:59:08:981">
+        <name>storm6</name>
+        <ip_addr>192.168.1.5</ip_addr>
+        <port_num>8888</port_num>
+    </records>
+</RecordStore>

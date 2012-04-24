@@ -36,6 +36,7 @@ public class ServerJob implements Comparable<ServerJob>{
 		this.ip_addr = inet.getHostAddress();
 		this.data = data;
 		this.job = type;
+		this.port_num = port_num;
 	}
 	
 	public static ServerJob make_job(InetAddress inet, int port_num, Job type, byte[] data) throws UnknownHostException{

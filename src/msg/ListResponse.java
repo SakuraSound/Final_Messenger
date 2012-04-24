@@ -4,11 +4,14 @@ import java.util.List;
 
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlSeeAlso;
 
-import data.AbstractRecord;
+import data.Record;
+import data.ServerInfo;
 
 @XmlRootElement(name="ReadListMessage")
-public class ListResponse<T extends AbstractRecord> extends GenericResponse {
+@XmlSeeAlso(value={Record.class, ServerInfo.class})
+public class ListResponse<T> extends GenericResponse {
     
     @XmlElement(name="records")
     private List<T> record_list;
@@ -20,7 +23,7 @@ public class ListResponse<T extends AbstractRecord> extends GenericResponse {
     public int get_numrecs(){ return num_recs; }
     
     
-    public static <T extends AbstractRecord> ListResponse<T> create_message(List<T> records){
+    public static <T> ListResponse<T> create_message(List<T> records){
         return new ListResponse<T>(records);
     }
 
